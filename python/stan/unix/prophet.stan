@@ -79,7 +79,8 @@ data {
   int S;                // Number of changepoints
   vector[S] t_change;   // Times of trend changepoints
   matrix[T,K] X;        // Regressors
-  vector[K] sigmas;     // Scale on seasonality prior
+  vector[K] mus;        // Location on regressor priors
+  vector[K] sigmas;     // Scale on regressor priors
   real<lower=0> tau;    // Scale on changepoints prior
   int trend_indicator;  // 0 for linear, 1 for logistic
   vector[K] s_a;        // Indicator of additive features
@@ -105,7 +106,7 @@ model {
   m ~ normal(0, 5);
   delta ~ double_exponential(0, tau);
   sigma_obs ~ normal(0, 0.5);
-  beta ~ normal(0, sigmas);
+  beta ~ normal(mus, sigmas);
 
   // Likelihood
   if (trend_indicator == 0) {

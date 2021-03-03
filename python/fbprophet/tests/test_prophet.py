@@ -623,7 +623,6 @@ class TestProphet(TestCase):
         self.assertTrue(np.array_equal((seasonal_features[conditional_weekly_columns] != 0).any(axis=1).values,
                                        df['is_conditional_week'].values))
 
-
     def test_added_regressors(self):
         m = Prophet()
         m.add_regressor('binary_feature', prior_scale=0.2)
@@ -726,6 +725,95 @@ class TestProphet(TestCase):
         m.add_regressor('constant_feature')
         m.fit(df)
         self.assertEqual(m.extra_regressors['constant_feature']['std'], 1)
+
+    def test_added_regressors_with_location_prior(self):
+        m = Prophet()
+        m.add_regressor('binary_feature', prior_scale=0.2, prior_location=1.0)
+        m.add_regressor('numeric_feature', prior_scale=0.5)
+
+        df = DATA.copy()
+        df['binary_feature'] = ['0'] * 255 + ['1'] * 255
+        df['numeric_feature'] = range(510)
+
+        m.fit(df)
+        # Check that standardizations are correctly set
+        # self.assertEqual(
+        #     m.extra_regressors['binary_feature'],
+        #     {
+        #         'prior_scale': 0.2,
+        #         'prior_location': 1.0,
+        #         'mu': 0,
+        #         'std': 1,
+        #         'standardize': 'auto',
+        #         'mode': 'additive',
+        #     },
+        # )
+        # self.assertEqual(
+        #     m.extra_regressors['numeric_feature']['prior_scale'], 0.5)
+        # self.assertEqual(
+        #     m.extra_regressors['numeric_feature']['mu'], 254.5)
+        # self.assertAlmostEqual(
+        #     m.extra_regressors['numeric_feature']['std'], 147.368585, places=5)
+
+        # # Check that standardization is done correctly
+        # df2 = m.setup_dataframe(df.copy())
+        # self.assertEqual(df2['binary_feature'][0], 0)
+        # self.assertAlmostEqual(df2['numeric_feature'][0], -1.726962, places=4)
+        # self.assertAlmostEqual(df2['binary_feature2'][0], 2.022859, places=4)
+        # # Check that feature matrix and prior scales are correctly constructed
+        # seasonal_features, prior_scales, component_cols, modes = (
+        #     m.make_all_seasonality_features(df2)
+        # )
+        # self.assertEqual(seasonal_features.shape[1], 30)
+        # names = ['binary_feature', 'numeric_feature', 'binary_feature2']
+        # true_priors = [0.2, 0.5, 10.]
+        # for i, name in enumerate(names):
+        #     self.assertIn(name, seasonal_features)
+        #     self.assertEqual(sum(component_cols[name]), 1)
+        #     self.assertEqual(
+        #         sum(np.array(prior_scales) * component_cols[name]),
+        #         true_priors[i],
+        #     )
+        # Check that forecast components are reasonable
+        future = pd.DataFrame({
+            'ds': ['2014-06-01'],
+            'binary_feature': [0],
+            'numeric_feature': [10]
+        })
+        # with self.assertRaises(ValueError):
+        #     m.predict(future)
+        # future['binary_feature2'] = 0
+        fcst = m.predict(future)
+        # self.assertEqual(fcst.shape[1], 37)
+        # self.assertEqual(fcst['binary_feature'][0], 0)
+        # self.assertAlmostEqual(
+        #     fcst['extra_regressors_additive'][0],
+        #     fcst['numeric_feature'][0] + fcst['binary_feature2'][0],
+        # )
+        # self.assertAlmostEqual(
+        #     fcst['extra_regressors_multiplicative'][0],
+        #     fcst['numeric_feature2'][0],
+        # )
+        # self.assertAlmostEqual(
+        #     fcst['additive_terms'][0],
+        #     fcst['yearly'][0] + fcst['weekly'][0]
+        #         + fcst['extra_regressors_additive'][0],
+        # )
+        # self.assertAlmostEqual(
+        #     fcst['multiplicative_terms'][0],
+        #     fcst['extra_regressors_multiplicative'][0],
+        # )
+        # self.assertAlmostEqual(
+        #     fcst['yhat'][0],
+        #     fcst['trend'][0] * (1 + fcst['multiplicative_terms'][0])
+        #         + fcst['additive_terms'][0],
+        # )
+        # # Check works if constant extra regressor at 0
+        # df['constant_feature'] = 0
+        # m = Prophet()
+        # m.add_regressor('constant_feature')
+        # m.fit(df)
+        # self.assertEqual(m.extra_regressors['constant_feature']['std'], 1)
 
     def test_set_seasonality_mode(self):
         # Setting attribute

@@ -549,7 +549,7 @@ class Prophet(object):
         return holiday_features, prior_scale_list, holiday_names
 
     def add_regressor(
-            self, name, prior_scale=None, standardize='auto', mode=None
+            self, name, prior_scale=None, prior_location=0, standardize='auto', mode=None
     ):
         """Add an additional regressor to be used for fitting and predicting.
 
@@ -569,6 +569,7 @@ class Prophet(object):
         name: string name of the regressor.
         prior_scale: optional float scale for the normal prior. If not
             provided, self.holidays_prior_scale will be used.
+        prior_location: optional float location for the normal prior.
         standardize: optional, specify whether this regressor will be
             standardized prior to fitting. Can be 'auto' (standardize if not
             binary), True, or False.
@@ -593,6 +594,7 @@ class Prophet(object):
             raise ValueError("mode must be 'additive' or 'multiplicative'")
         self.extra_regressors[name] = {
             'prior_scale': prior_scale,
+            'prior_location': prior_location,
             'standardize': standardize,
             'mu': 0.,
             'std': 1.,
@@ -722,6 +724,7 @@ class Prophet(object):
             component names for each mode of seasonality.
         """
         seasonal_features = []
+        prior_locations = []
         prior_scales = []
         modes = {'additive': [], 'multiplicative': []}
 
@@ -738,6 +741,7 @@ class Prophet(object):
             seasonal_features.append(features)
             prior_scales.extend(
                 [props['prior_scale']] * features.shape[1])
+            prior_locations.extend([0] * features.shape[1])
             modes[props['mode']].append(name)
 
         # Holiday features
@@ -748,11 +752,13 @@ class Prophet(object):
             )
             seasonal_features.append(features)
             prior_scales.extend(holiday_priors)
+            prior_locations.extend([0] * len(holiday_priors))
             modes[self.seasonality_mode].extend(holiday_names)
 
         # Additional regressors
         for name, props in self.extra_regressors.items():
             seasonal_features.append(pd.DataFrame(df[name]))
+            prior_locations.append(props['prior_location'])
             prior_scales.append(props['prior_scale'])
             modes[props['mode']].append(name)
 
@@ -761,12 +767,13 @@ class Prophet(object):
             seasonal_features.append(
                 pd.DataFrame({'zeros': np.zeros(df.shape[0])}))
             prior_scales.append(1.)
+            prior_locations.append(0.0)
 
         seasonal_features = pd.concat(seasonal_features, axis=1)
         component_cols, modes = self.regressor_column_matrix(
             seasonal_features, modes
         )
-        return seasonal_features, prior_scales, component_cols, modes
+        return seasonal_features, prior_scales, prior_locations, component_cols, modes
 
     def regressor_column_matrix(self, seasonal_features, modes):
         """Dataframe indicating which columns of the feature matrix correspond
@@ -1057,7 +1064,7 @@ class Prophet(object):
         history = self.setup_dataframe(history, initialize_scales=True)
         self.history = history
         self.set_auto_seasonalities()
-        seasonal_features, prior_scales, component_cols, modes = (
+        seasonal_features, prior_scales, prior_locations, component_cols, modes = (
             self.make_all_seasonality_features(history))
         self.train_component_cols = component_cols
         self.component_modes = modes
@@ -1072,6 +1079,7 @@ class Prophet(object):
             't': history['t'],
             't_change': self.changepoints_t,
             'X': seasonal_features,
+            'mus': prior_locations,
             'sigmas': prior_scales,
             'tau': self.changepoint_prior_scale,
             'trend_indicator': int(self.growth == 'logistic'),
@@ -1286,7 +1294,7 @@ class Prophet(object):
         -------
         Dataframe with seasonal components.
         """
-        seasonal_features, _, component_cols, _ = (
+        seasonal_features, _, _, component_cols, _ = (
             self.make_all_seasonality_features(df)
         )
         lower_p = 100 * (1.0 - self.interval_width) / 2
@@ -1327,7 +1335,7 @@ class Prophet(object):
         )))
 
         # Generate seasonality features once so we can re-use them.
-        seasonal_features, _, component_cols, _ = (
+        seasonal_features, _, _, component_cols, _ = (
             self.make_all_seasonality_features(df)
         )
 
