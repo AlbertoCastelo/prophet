@@ -1090,10 +1090,12 @@ class Prophet(object):
         if self.growth == 'linear':
             dat['cap'] = np.zeros(self.history.shape[0])
             kinit = self.linear_growth_init(history)
-        else:
+        elif self.growth == 'logistic':
             dat['cap'] = history['cap_scaled']
             kinit = self.logistic_growth_init(history)
-
+        else:
+            dat['cap'] = np.zeros(self.history.shape[0])
+            kinit = (0, 0)
         model = prophet_stan_model
 
         def stan_init():
@@ -1181,7 +1183,8 @@ class Prophet(object):
 
         df['trend'] = self.predict_trend(df)
         seasonal_components = self.predict_seasonal_components(df)
-        intervals = self.predict_uncertainty(df)
+        if self.growth != 'no_trend':
+            intervals = self.predict_uncertainty(df)
 
         # Drop columns except ds, cap, floor, and trend
         cols = ['ds', 'trend']
@@ -1190,7 +1193,10 @@ class Prophet(object):
         if self.logistic_floor:
             cols.append('floor')
         # Add in forecast components
-        df2 = pd.concat((df[cols], intervals, seasonal_components), axis=1)
+        if self.growth != 'no_trend':
+            df2 = pd.concat((df[cols], intervals, seasonal_components), axis=1)
+        else:
+            df2 = pd.concat((df[cols], seasonal_components), axis=1)
         df2['yhat'] = (
                 df2['trend'] * (1 + df2['multiplicative_terms'])
                 + df2['additive_terms']
@@ -1276,12 +1282,16 @@ class Prophet(object):
         t = np.array(df['t'])
         if self.growth == 'linear':
             trend = self.piecewise_linear(t, deltas, k, m, self.changepoints_t)
-        else:
+            return trend * self.y_scale + df['floor']
+        if self.growth == 'logistic':
             cap = df['cap_scaled']
             trend = self.piecewise_logistic(
                 t, cap, deltas, k, m, self.changepoints_t)
 
-        return trend * self.y_scale + df['floor']
+            return trend * self.y_scale + df['floor']
+
+        if self.growth == 'no_trend':
+            return np.zeros(len(df))
 
     def predict_seasonal_components(self, df):
         """Predict seasonality components, holidays, and added regressors.
@@ -1383,6 +1393,7 @@ class Prophet(object):
         -------
         Dataframe with uncertainty intervals.
         """
+
         sim_values = self.sample_posterior_predictive(df)
 
         lower_p = 100 * (1.0 - self.interval_width) / 2
