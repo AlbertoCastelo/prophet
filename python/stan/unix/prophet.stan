@@ -82,7 +82,7 @@ data {
   vector[K] mus;        // Location on regressor priors
   vector[K] sigmas;     // Scale on regressor priors
   real<lower=0> tau;    // Scale on changepoints prior
-  int trend_indicator;  // 0 for linear, 1 for logistic
+  int trend_indicator;  // 0 for linear, 1 for logistic, 2 for no-trend
   vector[K] s_a;        // Indicator of additive features
   vector[K] s_m;        // Indicator of multiplicative features
 }
@@ -120,6 +120,12 @@ model {
     y ~ normal(
       logistic_trend(k, m, delta, t, cap, A, t_change, S)
       .* (1 + X * (beta .* s_m))
+      + X * (beta .* s_a),
+      sigma_obs
+    );
+  } else if (trend_indicator == 2) {
+    y ~ normal(
+      (1 + X * (beta .* s_m))
       + X * (beta .* s_a),
       sigma_obs
     );

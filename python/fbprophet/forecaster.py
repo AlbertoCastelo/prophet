@@ -143,9 +143,9 @@ class Prophet(object):
 
     def validate_inputs(self):
         """Validates the inputs to Prophet."""
-        if self.growth not in ('linear', 'logistic'):
+        if self.growth not in ('linear', 'logistic', 'no_trend'):
             raise ValueError(
-                "Parameter 'growth' should be 'linear' or 'logistic'.")
+                "Parameter 'growth' should be 'linear', 'logistic' or 'no_trend'.")
         if ((self.changepoint_range < 0) or (self.changepoint_range > 1)):
             raise ValueError("Parameter 'changepoint_range' must be in [0, 1]")
         if self.holidays is not None:
@@ -1082,7 +1082,7 @@ class Prophet(object):
             'mus': prior_locations,
             'sigmas': prior_scales,
             'tau': self.changepoint_prior_scale,
-            'trend_indicator': int(self.growth == 'logistic'),
+            'trend_indicator': self._get_trend_indicator(),
             's_a': component_cols['additive_terms'],
             's_m': component_cols['multiplicative_terms'],
         }
@@ -1558,3 +1558,11 @@ class Prophet(object):
             m=self, fcst=fcst, uncertainty=uncertainty, plot_cap=plot_cap,
             weekly_start=weekly_start, yearly_start=yearly_start,
         )
+
+    def _get_trend_indicator(self):
+        if self.growth == 'logistic':
+            return 0
+        if self.growth == 'linear':
+            return 1
+        # no trend
+        return 2
